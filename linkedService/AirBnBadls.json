@@ -1,0 +1,10 @@
+{
+	"name": "AirBnBadls",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://airbnbazuredatastorage.dfs.core.windows.net/"
+		}
+	}
+}
