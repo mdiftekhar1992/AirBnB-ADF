@@ -1,0 +1,15 @@
+{
+	"name": "BookingDataCosmosDb",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AirBnBCosmosDb",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "CosmosDbSqlApiCollection",
+		"schema": {},
+		"typeProperties": {
+			"collectionName": "bookings"
+		}
+	}
+}
