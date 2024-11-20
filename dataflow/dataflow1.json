@@ -1,0 +1,112 @@
+{
+	"name": "dataflow1",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "BookingDataCosmosDb",
+						"type": "DatasetReference"
+					},
+					"name": "BookingData",
+					"description": "Import data from BookingDataCosmosDB"
+				},
+				{
+					"dataset": {
+						"referenceName": "BookingFactDataSynapse",
+						"type": "DatasetReference"
+					},
+					"name": "SynapseForLookup",
+					"description": "Import data from BookingFactDataSynapse"
+				}
+			],
+			"sinks": [],
+			"transformations": [
+				{
+					"name": "DataQualityCheck",
+					"description": "Conditionally distributing the data in check_out_date, check_in-date groups, based on column'{1}'"
+				},
+				{
+					"name": "DerivedColumns"
+				},
+				{
+					"name": "LookupinSynapse",
+					"description": "Lookup on 'DerivedColumns' from 'SynapseForlookup'"
+				},
+				{
+					"name": "AlterRowForUpdate",
+					"description": "Inserting, Updating, deleting, and/or upserting using expresiions on columns 'SynapseForLookup@booking_id'"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          check_out_date as date,",
+				"          customer_id as short,",
+				"          timestamp as timestamp,",
+				"          owner_id as string,",
+				"          check_in_date as date,",
+				"          property_id as string,",
+				"          amount as double,",
+				"          booking_id as string,",
+				"          currency as string,",
+				"          property_location as (city as string, country as string),",
+				"          booking_date as timestamp",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     enableChangeFeed: true,",
+				"     changeFeedStartFromTheBeginning: false,",
+				"     format: 'document') ~> BookingData",
+				"source(output(",
+				"          booking_id as string,",
+				"          property_id as string,",
+				"          customer_id as integer,",
+				"          owner_id as string,",
+				"          check_in_date as date,",
+				"          check_out_date as date,",
+				"          booking_date as timestamp,",
+				"          amount as double,",
+				"          currency as string,",
+				"          city as string,",
+				"          country as string,",
+				"          full_address as string,",
+				"          stay_duration as long,",
+				"          booking_year as integer,",
+				"          booking_month as integer,",
+				"          timestamp as timestamp",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     isolationLevel: 'READ_UNCOMMITTED',",
+				"     format: 'table',",
+				"     staged: true) ~> SynapseForLookup",
+				"BookingData split(check_out_date<check_in_date,",
+				"     disjoint: true) ~> DataQualityCheck@(BadRecords, AcceptedRecords)",
+				"DataQualityCheck@AcceptedRecords derive(stay_duration = (toTimestamp(check_out_date) - toTimestamp(check_in_date))/86400000,",
+				"          booking_year = year(booking_date),",
+				"          booking_month = month(booking_date),",
+				"          full_address = concat(property_location.city,',', property_location.country),",
+				"          city = property_location.city,",
+				"          country = property_location.country,",
+				"          booking_id = booking_id,",
+				"          booking_date = booking_date,",
+				"          check_out_date = check_out_date,",
+				"          customer_id = customer_id,",
+				"          timestamp = timestamp,",
+				"          owner_id = owner_id,",
+				"          check_in_date = check_in_date,",
+				"          property_id = property_id,",
+				"          amount = amount,",
+				"          currency = currency) ~> DerivedColumns",
+				"DerivedColumns, SynapseForLookup lookup(DerivedColumns@booking_id == SynapseForLookup@booking_id,",
+				"     multiple: false,",
+				"     pickup: 'first',",
+				"     desc(SynapseForLookup@timestamp, true),",
+				"     broadcast: 'auto')~> LookupinSynapse",
+				"LookupinSynapse alterRow(insertIf(isNull(SynapseForLookup@booking_id)),",
+				"     updateIf(not(isNull(SynapseForLookup@booking_id)))) ~> AlterRowForUpdate"
+			]
+		}
+	}
+}
